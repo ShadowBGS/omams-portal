@@ -7,13 +7,47 @@
    Override settings using config.production.js for production.
    ============================================================ */
 
+const DEFAULT_PROD_API_URL = 'https://att-back-0xvj.onrender.com';
+
+function normalizeApiUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  // Remove trailing slashes so paths concatenate reliably.
+  return url.trim().replace(/\/+$/, '');
+}
+
+function resolveApiBaseUrl() {
+  const isLocal = window.location.hostname === 'localhost';
+  if (isLocal) return 'http://localhost:8000';
+
+  const configured = normalizeApiUrl(window.ENV?.API_URL);
+  const fallback = normalizeApiUrl(DEFAULT_PROD_API_URL);
+
+  if (!configured) return fallback;
+
+  try {
+    const configuredUrl = new URL(configured);
+    const currentHost = window.location.host;
+    const configuredHost = configuredUrl.host;
+    const configuredPath = configuredUrl.pathname.replace(/\/+$/, '');
+
+    // Guard against pointing API_URL to the portal host root.
+    if (configuredHost === currentHost && (configuredPath === '' || configuredPath === '/')) {
+      console.warn('[CONFIG] API_URL points to portal host; falling back to backend URL.');
+      return fallback;
+    }
+  } catch (_) {
+    console.warn('[CONFIG] Invalid API_URL; falling back to backend URL.');
+    return fallback;
+  }
+
+  return configured;
+}
+
 const CONFIG = {
   // API Configuration
   // For development: 'http://localhost:8000'
   // For production: Set via config.production.js or environment
-  apiBaseUrl: window.location.hostname === 'localhost' 
-    ? 'http://localhost:8000'
-    : (window.ENV?.API_URL || ''),
+  apiBaseUrl: resolveApiBaseUrl(),
 
   // Firebase Configuration
   // These are PUBLIC keys - it's safe to commit them
