@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>OMAMS – Attendance Portal</title>
+  <meta name="description"
+    content="OMAMS Attendance Management Portal – login to view and export your attendance records." />
+  <meta name="theme-color" content="#19ACA2" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <style>
+    /* ── Splash screen ──────────────────────────────── */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      background: #080b12;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .splash-logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .splash-logo .logo-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 20px;
+      overflow: hidden;
+      animation: splashPulse 1.6s ease-in-out infinite;
+    }
+
+    @keyframes splashPulse {
+
+      0%,
+      100% {
+        box-shadow: 0 4px 30px rgba(25, 172, 162, 0.45);
+      }
+
+      50% {
+        box-shadow: 0 4px 50px rgba(25, 172, 162, 0.85);
+      }
+    }
+
+    .splash-logo h1 {
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+      color: #f1f5f9;
+    }
+
+    .splash-logo span {
+      color: #22c9be;
+    }
+
+    .splash-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .splash-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(25, 172, 162, 0.4);
+      animation: dotBounce 1.2s ease-in-out infinite;
+    }
+
+    .splash-dot:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .splash-dot:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes dotBounce {
+
+      0%,
+      80%,
+      100% {
+        transform: scale(0.8);
+        background: rgba(25, 172, 162, 0.4);
+      }
+
+      40% {
+        transform: scale(1.2);
+        background: #22c9be;
+      }
+    }
+
+    /* ── Spinner keyframe (used in Google btn) ──────── */
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ── Download section ───────────────────────────── */
+    .download-section {
+      margin-top: 28px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .download-section p {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+
+    .btn-download {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 20px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(34, 197, 94, 0.06));
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      color: #4ade80;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    .btn-download:hover {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(34, 197, 94, 0.1));
+      box-shadow: 0 4px 18px rgba(34, 197, 94, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-download .dl-icon {
+      font-size: 1.2rem;
+    }
+
+    .btn-download .dl-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1px;
+    }
+
+    .btn-download .dl-label {
+      font-size: 0.88rem;
+    }
+
+    .btn-download .dl-sub {
+      font-size: 0.68rem;
+      font-weight: 400;
+      opacity: 0.7;
+    }
+
+    /* ── Download section ───────────────────────────── */
+    .download-section {
+      margin-top: 28px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .download-section p {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+
+    .btn-download {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 20px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(34, 197, 94, 0.06));
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      color: #4ade80;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    .btn-download:hover {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.22), rgba(34, 197, 94, 0.1));
+      box-shadow: 0 4px 18px rgba(34, 197, 94, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-download .dl-icon {
+      font-size: 1.2rem;
+    }
+
+    .btn-download .dl-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1px;
+    }
+
+    .btn-download .dl-label {
+      font-size: 0.88rem;
+    }
+
+    .btn-download .dl-sub {
+      font-size: 0.68rem;
+      font-weight: 400;
+      opacity: 0.7;
+    }
+
+    /* ── Lecturer Students Override ────────────────────────── */
+    .students-workspace {
+      display: grid !important;
+      grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) !important;
+      min-height: 520px !important;
+      gap: 0 !important;
+    }
+
+    .students-panel {
+      min-height: 100% !important;
+    }
+
+    .students-panel-left {
+      border-right: 1px solid rgba(25, 172, 162, 0.18) !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    .students-panel-head {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 18px 20px 12px !important;
+    }
+
+    .students-panel-head h3 {
+      font-size: 0.93rem !important;
+    }
+
+    .students-search-wrap {
+      padding: 0 20px 14px !important;
+      border-bottom: 1px solid rgba(25, 172, 162, 0.09) !important;
+    }
+
+    .students-list {
+      padding: 10px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 8px !important;
+      overflow-y: auto !important;
+      max-height: 600px !important;
+    }
+
+    .student-list-item {
+      background: rgba(255, 255, 255, 0.045) !important;
+      border: 1px solid rgba(25, 172, 162, 0.09) !important;
+      border-radius: 12px !important;
+      padding: 14px 16px !important;
+      text-align: left !important;
+      color: #eef6f8 !important;
+      cursor: pointer !important;
+      transition: all 0.25s cubic-bezier(.4, 0, .2, 1) !important;
+      display: block !important;
+      width: 100% !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }
+
+    .student-list-item::before {
+      content: '' !important;
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      bottom: 0 !important;
+      width: 3px !important;
+      background: linear-gradient(180deg, #19ACA2, #22c9be) !important;
+      opacity: 0 !important;
+      transition: opacity 0.2s !important;
+    }
+
+    .student-list-item:hover {
+      border-color: rgba(25, 172, 162, 0.18) !important;
+      background: rgba(25, 172, 162, 0.07) !important;
+      transform: translateY(-2px) !important;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    .student-list-item:hover::before {
+      opacity: 0.5 !important;
+    }
+
+    .student-list-item.active {
+      border-color: rgba(25, 172, 162, 0.4) !important;
+      background: linear-gradient(135deg, rgba(25, 172, 162, 0.16), rgba(21, 35, 72, 0.3)) !important;
+      box-shadow: 0 4px 15px rgba(25, 172, 162, 0.15) !important;
+    }
+
+    .student-list-item.active::before {
+      opacity: 1 !important;
+    }
+
+    .student-list-top {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+      margin-bottom: 6px !important;
+    }
+
+    .student-name {
+      font-weight: 700 !important;
+      font-size: 0.92rem !important;
+      letter-spacing: -0.2px !important;
+    }
+
+    .student-meta {
+      font-size: 0.72rem !important;
+      font-weight: 600 !important;
+      color: #22c9be !important;
+      background: rgba(25, 172, 162, 0.12) !important;
+      padding: 2px 8px !important;
+      border-radius: 99px !important;
+      white-space: nowrap !important;
+    }
+
+    .student-list-sub {
+      font-size: 0.76rem !important;
+      color: #7aaab8 !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+
+    .students-panel-right {
+      padding: 24px 28px !important;
+    }
+
+    .students-detail-head h3 {
+      font-size: 1.35rem !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.3px !important;
+      margin: 0 !important;
+    }
+
+    .students-detail-head p {
+      margin-top: 6px !important;
+      font-size: 0.88rem !important;
+      color: #7aaab8 !important;
+    }
+
+    .students-detail-meta {
+      margin-top: 10px !important;
+      display: flex !important;
+      gap: 8px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .students-detail-meta span {
+      font-size: 0.72rem !important;
+      color: #22c9be !important;
+      background: rgba(25, 172, 162, 0.1) !important;
+      border: 1px solid rgba(25, 172, 162, 0.2) !important;
+      border-radius: 999px !important;
+      padding: 3px 9px !important;
+    }
+
+    @media (max-width: 768px) {
+      .students-workspace {
+        grid-template-columns: 1fr !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════
+     SPLASH (shown while Firebase checks auth state)
+══════════════════════════════════════════════════════ -->
+  <div id="splash-screen">
+    <div class="splash-logo">
+      <div class="logo-icon"><img src="logo.svg" alt="OMAMS" style="width:64px;height:64px;display:block"></div>
+      <h1>OMA<span>MS</span></h1>
+    </div>
+    <div class="splash-dots">
+      <div class="splash-dot"></div>
+      <div class="splash-dot"></div>
+      <div class="splash-dot"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+     LOGIN PAGE
+══════════════════════════════════════════════════════ -->
+  <div id="login-page" class="hidden">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon"><img src="logo.svg" alt="OMAMS logo" style="width:52px;height:52px;display:block"></div>
+        <h1>OMA<span>MS</span></h1>
+      </div>
+      <h2>Welcome back</h2>
+      <p class="subtitle">Sign in to view and export your attendance records.</p>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-email" onclick="switchTab('email')">✉ Email</button>
+        <button class="auth-tab" id="tab-google" onclick="switchTab('google')">G&nbsp; Google</button>
+      </div>
+
+      <!-- Email panel -->
+      <div id="panel-email">
+        <div id="auth-error" class="error-msg hidden"></div>
+        <div class="form-group">
+          <label for="input-email">Email address</label>
+          <input type="email" id="input-email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="input-password">Password</label>
+          <input type="password" id="input-password" placeholder="••••••••" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter') emailLogin()" />
+        </div>
+        <button class="btn btn-primary" id="btn-email-login" onclick="emailLogin()">
+          <span id="btn-email-text">Sign in</span>
+        </button>
+      </div>
+
+      <!-- Google panel -->
+      <div id="panel-google" class="hidden">
+        <div id="google-error" class="error-msg hidden"></div>
+        <button class="btn btn-google" id="btn-google-login" onclick="googleLogin()">
+          <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#EA4335"
+              d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+            <path fill="#4285F4"
+              d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+            <path fill="#FBBC05"
+              d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+            <path fill="#34A853"
+              d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+          </svg>
+          Continue with Google
+        </button>
+      </div>
+
+      <!-- Download section -->
+      <div class="download-section">
+        <p>Don't have the app yet? Download it below.</p>
+        <a class="btn-download" id="btn-download-app" href="OMAMS.apk" download="OMAMS.apk">
+          <span class="dl-icon">📱</span>
+          <span class="dl-text">
+            <span class="dl-label">Download OMAMS</span>
+            <span class="dl-sub">Android APK · v1.0</span>
+          </span>
+          <span style="margin-left:auto;font-size:1rem">⬇</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+     DASHBOARD PAGE
+══════════════════════════════════════════════════════ -->
+  <div id="dashboard-page" class="hidden">
+
+    <!-- Mobile toggle -->
+    <button class="mobile-nav-toggle" onclick="toggleMobileSidebar()">☰</button>
+    <div class="dashboard-overlay" onclick="closeMobileSidebar()"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon"><img src="logo.svg" alt="OMAMS" style="width:36px;height:36px;display:block"></div>
+        <span class="wordmark">OMA<span class="logo-sub">MS</span></span>
+      </div>
+
+      <div class="nav-section-label">Navigation</div>
+      <nav class="sidebar-nav" id="sidebar-nav"></nav>
+
+      <!-- <a class="btn-sidebar-download" href="OMAMS.apk" download="OMAMS.apk">
+        <span class="download-icon">📱</span>
+        <span class="download-text">
+          <span class="download-title">Download OMAMS</span>
+          <span class="download-sub">Android APK · v1.0</span>
+        </span>
+        <span class="download-arrow">⬇</span>
+      </a> -->
+
+      <div class="sidebar-user">
+        <div class="user-avatar" id="user-avatar-el"></div>
+        <div class="user-info">
+          <div class="user-name" id="user-display-name">—</div>
+          <div class="user-role" id="user-display-role">—</div>
+        </div>
+        <button class="btn-logout" title="Sign out" onclick="logout()">⏻</button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main-content" id="main-content"></main>
+  </div>
+
+  <div id="toast-container"></div>
+  <!-- Load configuration first -->
+  <script src="config.js"></script>
+  <!-- Then load main application -->
+  <script src="app.js"></script>
+</body>
+
+</html>
