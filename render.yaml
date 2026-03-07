@@ -11,8 +11,33 @@ services:
     buildCommand: chmod +x render-build.sh && ./render-build.sh
     staticPublishPath: .
     
-    # Custom headers for security
+    # Custom headers for security and MIME types
     headers:
+      # CSS Files - Fix MIME type issue
+      - path: /*.css
+        name: Content-Type
+        value: text/css; charset=utf-8
+      - path: /*.css
+        name: Cache-Control
+        value: public, max-age=31536000
+      
+      # JavaScript Files
+      - path: /*.js
+        name: Content-Type
+        value: application/javascript; charset=utf-8
+      - path: /*.js
+        name: Cache-Control
+        value: public, max-age=31536000
+      
+      # HTML Files
+      - path: /*.html
+        name: Content-Type
+        value: text/html; charset=utf-8
+      - path: /*.html
+        name: Cache-Control
+        value: no-cache
+      
+      # Security Headers (all files)
       - path: /*
         name: X-Frame-Options
         value: SAMEORIGIN
@@ -30,7 +55,7 @@ services:
         value: "geolocation=(), microphone=(), camera=()"
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.firebaseapp.com https://*.googleapis.com https://your-backend.onrender.com; frame-src https://*.firebaseapp.com;"
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.firebaseapp.com https://*.googleapis.com https://*.onrender.com; frame-src https://*.firebaseapp.com;"
     
     # Routes configuration
     routes:

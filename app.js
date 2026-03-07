@@ -1285,8 +1285,8 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
-// Performance monitoring (optional - for development)
-if (window.performance && window.performance.measure) {
+// Performance monitoring (development only)
+if (DEBUG_MODE && window.performance && window.performance.measure) {
   window.addEventListener('load', () => {
     setTimeout(() => {
       const perfData = performance.getEntriesByType('navigation')[0];
