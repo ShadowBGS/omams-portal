@@ -5,7 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>OMAMS – Attendance Portal</title>
+  <title>OMAMS</title>
+  <link rel="shortcut icon" href="logo.svg" type="image/x-icon">
   <meta name="description"
     content="OMAMS Attendance Management Portal – login to view and export your attendance records." />
   <meta name="theme-color" content="#19ACA2" />
@@ -381,6 +382,53 @@
       border: 1px solid rgba(25, 172, 162, 0.2) !important;
       border-radius: 999px !important;
       padding: 3px 9px !important;
+    }
+
+    .students-course-list {
+      margin-top: 18px !important;
+    }
+
+    .students-course-title {
+      font-size: 0.8rem !important;
+      color: #7aaab8 !important;
+      margin-bottom: 8px !important;
+    }
+
+    .students-course-chips {
+      display: flex !important;
+      gap: 8px !important;
+      flex-wrap: wrap !important;
+    }
+
+    .student-course-chip {
+      border: 1px solid rgba(25, 172, 162, 0.18) !important;
+      background: rgba(0, 0, 0, 0.18) !important;
+      color: #eef6f8 !important;
+      border-radius: 9px !important;
+      padding: 6px 10px !important;
+      font-size: 0.74rem !important;
+      font-weight: 700 !important;
+      cursor: pointer !important;
+      transition: all 0.2s cubic-bezier(.4, 0, .2, 1) !important;
+    }
+
+    .student-course-chip:hover {
+      border-color: rgba(25, 172, 162, 0.35) !important;
+      background: rgba(25, 172, 162, 0.08) !important;
+      transform: translateY(-2px) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    .student-course-chip:focus {
+      outline: 2px solid #19ACA2 !important;
+      outline-offset: 2px !important;
+    }
+
+    .student-course-chip.active {
+      border-color: rgba(25, 172, 162, 0.5) !important;
+      background: rgba(25, 172, 162, 0.14) !important;
+      color: #79f8ef !important;
+      box-shadow: 0 4px 14px rgba(25, 172, 162, 0.3) !important;
     }
 
     @media (max-width: 768px) {
