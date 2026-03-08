@@ -325,7 +325,7 @@ function greetingBanner(name) {
 async function renderStudentAttendance() {
   setMain(skeletonHTML());
   try {
-    allSessions = (await apiGet('/student/my-sessions')) ?? [];
+    allSessions = (await apiGetAllPages('/student/my-sessions')) ?? [];
     sortState = { col: null, dir: 1 };
     setMain(buildStudentAttendanceHTML(allSessions, null));
   } catch (e) {
@@ -338,7 +338,7 @@ async function renderCourseAttendance(courseCode) {
   setMain(skeletonHTML());
   // reuse allSessions if already loaded, otherwise fetch
   if (!allSessions.length) {
-    try { allSessions = (await apiGet('/student/my-sessions')) ?? []; }
+    try { allSessions = (await apiGetAllPages('/student/my-sessions')) ?? []; }
     catch (e) { setMain(errorState('Failed to load attendance.', e.message)); return; }
   }
   const courseSessions = allSessions.filter(s => s.course_code === courseCode);
@@ -673,7 +673,7 @@ async function openLecturerCourse(id, code, name) {
 async function renderLecturerSessions() {
   setMain(skeletonHTML());
   try {
-    lecturerSessions = await apiGet(`/courses/${selectedCourseId}/sessions`);
+    lecturerSessions = await apiGetAllPages(`/courses/${selectedCourseId}/sessions`);
     setMain(buildLecturerSessionsHTML());
   } catch (e) {
     console.error('Failed to load lecturer sessions:', e);
@@ -736,7 +736,7 @@ async function loadSessionAttendance(sessionId) {
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   try {
-    sessionAttendance = await apiGet(`/sessions/${sessionId}/attendance`);
+    sessionAttendance = await apiGetAllPages(`/sessions/${sessionId}/attendance`);
     panel.innerHTML = buildSessionAttendanceHTML(sessionId);
   } catch (e) {
     panel.innerHTML = errorState('Failed to load attendance.', e.message);
@@ -890,7 +890,7 @@ async function renderLecturerStudents() {
     await Promise.all(lecturerCourses.map(async (course) => {
       let courseStudents = [];
       try {
-        courseStudents = await apiGet(`/courses/${course.course_id}/students`);
+        courseStudents = await apiGetAllPages(`/courses/${course.course_id}/students`);
       } catch (_) {
         courseStudents = [];
       }
@@ -1043,11 +1043,11 @@ async function selectLecturerStudentCourse(courseId) {
   renderLecturerStudentDetail(true);
 
   try {
-    const sessions = await apiGet(`/courses/${courseId}/sessions`);
+    const sessions = await apiGetAllPages(`/courses/${courseId}/sessions`);
     const recordsBySession = await Promise.all(
       sessions.map(async (session) => {
         try {
-          const rows = await apiGet(`/sessions/${session.session_id}/attendance`);
+          const rows = await apiGetAllPages(`/sessions/${session.session_id}/attendance`);
           const record = rows.find(r => r.student?.student_id === student.student_id);
           return record ? {
             session_id: session.session_id,
@@ -1190,6 +1190,31 @@ async function apiGet(path) {
     }
     throw error;
   }
+}
+
+async function apiGetAllPages(path, pageSize = 200) {
+  const allItems = [];
+  let page = 1;
+
+  while (true) {
+    const separator = path.includes('?') ? '&' : '?';
+    const pagedPath = `${path}${separator}page=${page}&page_size=${pageSize}`;
+    const response = await apiGet(pagedPath);
+
+    // Backward compatibility: if backend still returns a plain array.
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    const items = response?.items ?? [];
+    allItems.push(...items);
+
+    const hasNext = response?.pagination?.has_next;
+    if (!hasNext) break;
+    page += 1;
+  }
+
+  return allItems;
 }
 
 async function apiPost(path, body) {
