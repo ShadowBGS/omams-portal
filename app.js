@@ -74,6 +74,31 @@ async function getToken() {
   return idToken;
 }
 
+function isLikelyNewFirebaseUser(user) {
+  const metadata = user?.metadata;
+  if (!metadata?.creationTime || !metadata?.lastSignInTime) return false;
+  return metadata.creationTime === metadata.lastSignInTime;
+}
+
+async function handleUnauthorizedPortalUser() {
+  const unauthorizedMessage = 'No account found. Please onboard via the mobile app before logging in.';
+  const signedInUser = currentUser;
+
+  if (signedInUser && isLikelyNewFirebaseUser(signedInUser)) {
+    try {
+      await signedInUser.delete();
+    } catch (deleteErr) {
+      console.warn('Could not delete newly-created Firebase user; falling back to sign-out:', deleteErr);
+      await auth.signOut();
+    }
+  } else {
+    await auth.signOut();
+  }
+
+  showLoginPage();
+  showAuthError(unauthorizedMessage);
+}
+
 // ─────────────────────────────────────────────────────────────
 //  LOGIN
 // ─────────────────────────────────────────────────────────────
@@ -191,6 +216,21 @@ function showDashboardPage() {
 // ─────────────────────────────────────────────────────────────
 
 async function bootDashboard() {
+  try {
+    userProfile = await apiGet('/profile/info');
+  } catch (e) {
+    if (e.status === 404 || e.message === 'User not found') {
+      await handleUnauthorizedPortalUser();
+      return;
+    }
+    const errorDetail = DEBUG_MODE
+      ? `Cannot connect to backend at ${API_BASE}`
+      : 'Please check your internet connection and try again.';
+    showDashboardPage();
+    setMain(errorState('Could not reach the backend.', errorDetail));
+    return;
+  }
+
   showDashboardPage();
 
   const name = currentUser.displayName || currentUser.email?.split('@')[0] || 'User';
@@ -202,28 +242,6 @@ async function bootDashboard() {
     }" alt="avatar" onerror="this.src='avatar.svg'" />`;
 
   setMain(skeletonHTML());
-
-  try {
-    userProfile = await apiGet('/profile/info');
-  } catch (e) {
-    if (e.status === 404 || e.message === 'User not found') {
-      // User authenticated with Firebase but has no app account.
-      // They must register via the mobile app first.
-      await auth.signOut();
-      showLoginPage();
-      const errEl = document.getElementById('auth-error');
-      if (errEl) {
-        errEl.textContent = 'No account found. Please onboard via the mobile app before logging in.';
-        errEl.classList.remove('hidden');
-      }
-      return;
-    }
-    const errorDetail = DEBUG_MODE
-      ? `Cannot connect to backend at ${API_BASE}`
-      : 'Please check your internet connection and try again.';
-    setMain(errorState('Could not reach the backend.', errorDetail));
-    return;
-  }
 
   // Auto-repair: if the role-specific DB row (students/lecturers table) is missing,
   // call /profile/complete to create it using the existing profile data.
