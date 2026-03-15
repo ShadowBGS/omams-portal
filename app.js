@@ -32,6 +32,7 @@ let lecturerStudentQuery = '';
 let selectedLecturerStudentId = null;
 let selectedLecturerStudentCourseId = null;
 let lecturerStudentCourseAttendance = [];
+const AUTH_ERROR_STORAGE_KEY = 'omams.portal.authError';
 
 // ─────────────────────────────────────────────────────────────
 //  AUTH
@@ -45,6 +46,25 @@ function hideSplash() {
   setTimeout(() => splash.remove(), 360);
 }
 
+function savePendingAuthError(message) {
+  if (!message) return;
+  try {
+    sessionStorage.setItem(AUTH_ERROR_STORAGE_KEY, message);
+  } catch (_) {
+    // Ignore storage errors (privacy mode/quota). The app can still show inline errors.
+  }
+}
+
+function consumePendingAuthError() {
+  try {
+    const msg = sessionStorage.getItem(AUTH_ERROR_STORAGE_KEY);
+    if (msg) sessionStorage.removeItem(AUTH_ERROR_STORAGE_KEY);
+    return msg;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Handle redirect result (for Google sign-in redirect method)
 auth.getRedirectResult().then((result) => {
   if (result.user) {
@@ -52,6 +72,8 @@ auth.getRedirectResult().then((result) => {
     console.log('Google sign-in via redirect successful');
   }
 }).catch((error) => {
+  const readable = friendlyAuthError(error.code);
+  savePendingAuthError(readable);
   if (error.code !== 'auth/popup-closed-by-user') {
     console.error('Redirect result error:', error);
   }
@@ -67,6 +89,10 @@ auth.onAuthStateChanged(async (user) => {
     currentUser = null; idToken = null;
     hideSplash();
     showLoginPage();
+    const pendingError = consumePendingAuthError();
+    if (pendingError) {
+      showAuthError(pendingError);
+    }
   }
 });
 
@@ -84,6 +110,7 @@ function isLikelyNewFirebaseUser(user) {
 async function handleUnauthorizedPortalUser() {
   const unauthorizedMessage = 'No account found. Please onboard via the mobile app before logging in.';
   const signedInUser = currentUser;
+  savePendingAuthError(unauthorizedMessage);
 
   if (signedInUser && isLikelyNewFirebaseUser(signedInUser)) {
     try {
@@ -143,9 +170,11 @@ async function emailLogin() {
 }
 
 async function googleLogin() {
-  const errEl = document.getElementById('google-error');
   const btn = document.getElementById('btn-google-login');
-  errEl.classList.add('hidden');
+  const authErrEl = document.getElementById('auth-error');
+  const googleErrEl = document.getElementById('google-error');
+  authErrEl?.classList.add('hidden');
+  googleErrEl?.classList.add('hidden');
   btn.disabled = true;
   btn.innerHTML = `<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span> Signing in…`;
 
@@ -156,8 +185,9 @@ async function googleLogin() {
   } catch (e) {
     console.error('Google sign-in error:', e);
 
-    errEl.textContent = friendlyAuthError(e.code);
-    errEl.classList.remove('hidden');
+    const readable = friendlyAuthError(e.code);
+    savePendingAuthError(readable);
+    showAuthError(readable);
     btn.disabled = false;
     btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg> Continue with Google`;
   }
@@ -180,9 +210,17 @@ function friendlyAuthError(code) {
 }
 
 function showAuthError(msg) {
-  const el = document.getElementById('auth-error');
-  el.textContent = msg;
-  el.classList.remove('hidden');
+  const authErrorEl = document.getElementById('auth-error');
+  if (authErrorEl) {
+    authErrorEl.textContent = msg;
+    authErrorEl.classList.remove('hidden');
+  }
+
+  const googleErrorEl = document.getElementById('google-error');
+  if (googleErrorEl) {
+    googleErrorEl.textContent = msg;
+    googleErrorEl.classList.remove('hidden');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
