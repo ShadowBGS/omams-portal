@@ -122,13 +122,13 @@ async function googleLogin() {
   errEl.classList.add('hidden');
   btn.disabled = true;
   btn.innerHTML = `<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span> Signing in…`;
-
+  
   try {
     // Try popup first (faster UX)
     await auth.signInWithPopup(googleProvider);
   } catch (e) {
     console.error('Google sign-in error:', e);
-
+    
     // If popup was blocked, automatically fall back to redirect
     if (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request') {
       try {
@@ -143,7 +143,7 @@ async function googleLogin() {
     } else {
       errEl.textContent = friendlyAuthError(e.code);
     }
-
+    
     errEl.classList.remove('hidden');
     btn.disabled = false;
     btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg> Continue with Google`;
@@ -205,17 +205,24 @@ async function bootDashboard() {
 
   try {
     userProfile = await apiGet('/profile/info');
-  } catch (_) {
-    try {
-      await apiPost('/auth/bootstrap', { role: 'student' });
-      userProfile = await apiGet('/profile/info');
-    } catch (e2) {
-      const errorDetail = DEBUG_MODE
-        ? `Cannot connect to backend at ${API_BASE}`
-        : 'Please check your internet connection and try again.';
-      setMain(errorState('Could not reach the backend.', errorDetail));
+  } catch (e) {
+    if (e.status === 404 || e.message === 'User not found') {
+      // User authenticated with Firebase but has no app account.
+      // They must register via the mobile app first.
+      await auth.signOut();
+      showLoginPage();
+      const errEl = document.getElementById('auth-error');
+      if (errEl) {
+        errEl.textContent = 'No account found. Please onboard via the mobile app before logging in.';
+        errEl.classList.remove('hidden');
+      }
       return;
     }
+    const errorDetail = DEBUG_MODE
+      ? `Cannot connect to backend at ${API_BASE}`
+      : 'Please check your internet connection and try again.';
+    setMain(errorState('Could not reach the backend.', errorDetail));
+    return;
   }
 
   // Auto-repair: if the role-specific DB row (students/lecturers table) is missing,
@@ -736,46 +743,7 @@ async function loadSessionAttendance(sessionId) {
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   try {
-    const rawAttendance = await apiGetAllPages(`/sessions/${sessionId}/attendance`);
-    let courseStudents = [];
-    try {
-      if (selectedCourseId) {
-        courseStudents = await apiGetAllPages(`/courses/${selectedCourseId}/students`);
-      }
-    } catch (_) { }
-
-    if (courseStudents.length > 0) {
-      const attendanceMap = new Map();
-
-      // Default all enrolled students to absent
-      courseStudents.forEach(student => {
-        attendanceMap.set(student.student_id, {
-          student: student,
-          status: 'absent',
-          verified: false,
-          timestamp: null
-        });
-      });
-
-      // Update with actual attendance records
-      rawAttendance.forEach(record => {
-        const sid = record.student?.student_id;
-        if (sid) {
-          attendanceMap.set(sid, {
-            student: record.student,
-            status: record.status ?? 'absent',
-            verified: !!record.verified,
-            timestamp: record.timestamp ?? null
-          });
-        }
-      });
-
-      sessionAttendance = Array.from(attendanceMap.values());
-      sessionAttendance.sort((a, b) => (a.student?.name || '').localeCompare(b.student?.name || ''));
-    } else {
-      sessionAttendance = rawAttendance;
-    }
-
+    sessionAttendance = await apiGetAllPages(`/sessions/${sessionId}/attendance`);
     panel.innerHTML = buildSessionAttendanceHTML(sessionId);
   } catch (e) {
     panel.innerHTML = errorState('Failed to load attendance.', e.message);
@@ -1088,14 +1056,14 @@ async function selectLecturerStudentCourse(courseId) {
         try {
           const rows = await apiGetAllPages(`/sessions/${session.session_id}/attendance`);
           const record = rows.find(r => r.student?.student_id === student.student_id);
-          return {
+          return record ? {
             session_id: session.session_id,
             start_time: session.start_time,
             end_time: session.end_time,
-            status: record?.status ?? 'absent',
-            verified: !!record?.verified,
-            timestamp: record?.timestamp ?? null,
-          };
+            status: record.status ?? 'absent',
+            verified: !!record.verified,
+            timestamp: record.timestamp,
+          } : null;
         } catch (_) {
           return null;
         }
@@ -1220,7 +1188,9 @@ async function apiGet(path) {
     });
     if (!res.ok) {
       const b = await res.json().catch(() => ({}));
-      throw new Error(b.detail ?? `Server error (${res.status})`);
+      const err = new Error(b.detail ?? `Server error (${res.status})`);
+      err.status = res.status;
+      throw err;
     }
     return res.json();
   } catch (error) {
