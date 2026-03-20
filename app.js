@@ -48,17 +48,22 @@ function hideSplash() {
 
 function savePendingAuthError(message) {
   if (!message) return;
-  try {
-    sessionStorage.setItem(AUTH_ERROR_STORAGE_KEY, message);
-  } catch (_) {
-    // Ignore storage errors (privacy mode/quota). The app can still show inline errors.
-  }
+  // Use both sessionStorage AND localStorage so the message survives the
+  // redirect round-trip (sessionStorage is wiped on some browsers after a
+  // cross-origin redirect, but localStorage persists).
+  try { sessionStorage.setItem(AUTH_ERROR_STORAGE_KEY, message); } catch (_) { }
+  try { localStorage.setItem(AUTH_ERROR_STORAGE_KEY, message); } catch (_) { }
 }
 
 function consumePendingAuthError() {
   try {
-    const msg = sessionStorage.getItem(AUTH_ERROR_STORAGE_KEY);
-    if (msg) sessionStorage.removeItem(AUTH_ERROR_STORAGE_KEY);
+    const msg =
+      sessionStorage.getItem(AUTH_ERROR_STORAGE_KEY) ||
+      localStorage.getItem(AUTH_ERROR_STORAGE_KEY);
+    if (msg) {
+      sessionStorage.removeItem(AUTH_ERROR_STORAGE_KEY);
+      localStorage.removeItem(AUTH_ERROR_STORAGE_KEY);
+    }
     return msg;
   } catch (_) {
     return null;
@@ -101,28 +106,23 @@ async function getToken() {
   return idToken;
 }
 
-function isLikelyNewFirebaseUser(user) {
-  const metadata = user?.metadata;
-  if (!metadata?.creationTime || !metadata?.lastSignInTime) return false;
-  return metadata.creationTime === metadata.lastSignInTime;
-}
 
 async function handleUnauthorizedPortalUser() {
   const unauthorizedMessage = 'No account found. Please onboard via the mobile app before logging in.';
-  const signedInUser = currentUser;
+  // Save the error message BEFORE signing out so it survives the auth state
+  // change (and any redirect round-trip).
   savePendingAuthError(unauthorizedMessage);
 
-  if (signedInUser && isLikelyNewFirebaseUser(signedInUser)) {
-    try {
-      await signedInUser.delete();
-    } catch (deleteErr) {
-      console.warn('Could not delete newly-created Firebase user; falling back to sign-out:', deleteErr);
-      await auth.signOut();
-    }
-  } else {
+  // Always use signOut — attempting delete() after a redirect sign-in fails
+  // because Firebase requires a recent interactive sign-in for account deletion.
+  try {
     await auth.signOut();
+  } catch (signOutErr) {
+    console.warn('Sign-out failed:', signOutErr);
   }
 
+  // onAuthStateChanged will fire with null and call showLoginPage(); we also
+  // call it here immediately in case the auth listener has already settled.
   showLoginPage();
   showAuthError(unauthorizedMessage);
 }
@@ -245,7 +245,10 @@ async function bootDashboard() {
   try {
     userProfile = await apiGet('/profile/info');
   } catch (e) {
-    if (e.status === 404 || e.message === 'User not found') {
+    // Only treat a genuine 404 as "user not registered" — everything else
+    // (network errors, 500s, etc.) should show the generic connection error
+    // so real users are not accidentally signed out.
+    if (e.status === 404) {
       await handleUnauthorizedPortalUser();
       return;
     }
