@@ -11,7 +11,6 @@ const DEBUG_MODE = CONFIG.features.enableDebugLogging;
 firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // ── App state ─────────────────────────────────────────────────
 let currentUser = null;
@@ -32,7 +31,6 @@ let lecturerStudentQuery = '';
 let selectedLecturerStudentId = null;
 let selectedLecturerStudentCourseId = null;
 let lecturerStudentCourseAttendance = [];
-const AUTH_ERROR_STORAGE_KEY = 'omams.portal.authError';
 
 // ─────────────────────────────────────────────────────────────
 //  AUTH
@@ -46,30 +44,6 @@ function hideSplash() {
   setTimeout(() => splash.remove(), 360);
 }
 
-function savePendingAuthError(message) {
-  if (!message) return;
-  // Use both sessionStorage AND localStorage so the message survives the
-  // redirect round-trip (sessionStorage is wiped on some browsers after a
-  // cross-origin redirect, but localStorage persists).
-  try { sessionStorage.setItem(AUTH_ERROR_STORAGE_KEY, message); } catch (_) { }
-  try { localStorage.setItem(AUTH_ERROR_STORAGE_KEY, message); } catch (_) { }
-}
-
-function consumePendingAuthError() {
-  try {
-    const msg =
-      sessionStorage.getItem(AUTH_ERROR_STORAGE_KEY) ||
-      localStorage.getItem(AUTH_ERROR_STORAGE_KEY);
-    if (msg) {
-      sessionStorage.removeItem(AUTH_ERROR_STORAGE_KEY);
-      localStorage.removeItem(AUTH_ERROR_STORAGE_KEY);
-    }
-    return msg;
-  } catch (_) {
-    return null;
-  }
-}
-
 // Handle redirect result (for Google sign-in redirect method)
 auth.getRedirectResult().then((result) => {
   if (result.user) {
@@ -77,8 +51,6 @@ auth.getRedirectResult().then((result) => {
     console.log('Google sign-in via redirect successful');
   }
 }).catch((error) => {
-  const readable = friendlyAuthError(error.code);
-  savePendingAuthError(readable);
   if (error.code !== 'auth/popup-closed-by-user') {
     console.error('Redirect result error:', error);
   }
@@ -94,37 +66,12 @@ auth.onAuthStateChanged(async (user) => {
     currentUser = null; idToken = null;
     hideSplash();
     showLoginPage();
-    const pendingError = consumePendingAuthError();
-    if (pendingError) {
-      showAuthError(pendingError);
-    }
   }
 });
 
 async function getToken() {
   idToken = await currentUser.getIdToken(false);
   return idToken;
-}
-
-
-async function handleUnauthorizedPortalUser() {
-  const unauthorizedMessage = 'No account found. Please onboard via the mobile app before logging in.';
-  // Save the error message BEFORE signing out so it survives the auth state
-  // change (and any redirect round-trip).
-  savePendingAuthError(unauthorizedMessage);
-
-  // Always use signOut — attempting delete() after a redirect sign-in fails
-  // because Firebase requires a recent interactive sign-in for account deletion.
-  try {
-    await auth.signOut();
-  } catch (signOutErr) {
-    console.warn('Sign-out failed:', signOutErr);
-  }
-
-  // onAuthStateChanged will fire with null and call showLoginPage(); we also
-  // call it here immediately in case the auth listener has already settled.
-  showLoginPage();
-  showAuthError(unauthorizedMessage);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -170,24 +117,34 @@ async function emailLogin() {
 }
 
 async function googleLogin() {
+  const errEl = document.getElementById('google-error');
   const btn = document.getElementById('btn-google-login');
-  const authErrEl = document.getElementById('auth-error');
-  const googleErrEl = document.getElementById('google-error');
-  authErrEl?.classList.add('hidden');
-  googleErrEl?.classList.add('hidden');
+  errEl.classList.add('hidden');
   btn.disabled = true;
   btn.innerHTML = `<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span> Signing in…`;
-
+  
   try {
-    // Redirect-only flow is more reliable on production origins and avoids popup COOP issues.
-    await auth.signInWithRedirect(googleProvider);
-    return;
+    // Try popup first (faster UX)
+    await auth.signInWithPopup(googleProvider);
   } catch (e) {
     console.error('Google sign-in error:', e);
-
-    const readable = friendlyAuthError(e.code);
-    savePendingAuthError(readable);
-    showAuthError(readable);
+    
+    // If popup was blocked, automatically fall back to redirect
+    if (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request') {
+      try {
+        // Redirect method works even with popup blockers
+        await auth.signInWithRedirect(googleProvider);
+        // User will be redirected, don't reset button
+        return;
+      } catch (redirectError) {
+        console.error('Google redirect error:', redirectError);
+        errEl.textContent = 'Unable to sign in with Google. Please enable popups or try email login.';
+      }
+    } else {
+      errEl.textContent = friendlyAuthError(e.code);
+    }
+    
+    errEl.classList.remove('hidden');
     btn.disabled = false;
     btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg> Continue with Google`;
   }
@@ -210,17 +167,9 @@ function friendlyAuthError(code) {
 }
 
 function showAuthError(msg) {
-  const authErrorEl = document.getElementById('auth-error');
-  if (authErrorEl) {
-    authErrorEl.textContent = msg;
-    authErrorEl.classList.remove('hidden');
-  }
-
-  const googleErrorEl = document.getElementById('google-error');
-  if (googleErrorEl) {
-    googleErrorEl.textContent = msg;
-    googleErrorEl.classList.remove('hidden');
-  }
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -242,24 +191,6 @@ function showDashboardPage() {
 // ─────────────────────────────────────────────────────────────
 
 async function bootDashboard() {
-  try {
-    userProfile = await apiGet('/profile/info');
-  } catch (e) {
-    // Only treat a genuine 404 as "user not registered" — everything else
-    // (network errors, 500s, etc.) should show the generic connection error
-    // so real users are not accidentally signed out.
-    if (e.status === 404) {
-      await handleUnauthorizedPortalUser();
-      return;
-    }
-    const errorDetail = DEBUG_MODE
-      ? `Cannot connect to backend at ${API_BASE}`
-      : 'Please check your internet connection and try again.';
-    showDashboardPage();
-    setMain(errorState('Could not reach the backend.', errorDetail));
-    return;
-  }
-
   showDashboardPage();
 
   const name = currentUser.displayName || currentUser.email?.split('@')[0] || 'User';
@@ -271,6 +202,21 @@ async function bootDashboard() {
     }" alt="avatar" onerror="this.src='avatar.svg'" />`;
 
   setMain(skeletonHTML());
+
+  try {
+    userProfile = await apiGet('/profile/info');
+  } catch (_) {
+    try {
+      await apiPost('/auth/bootstrap', { role: 'student' });
+      userProfile = await apiGet('/profile/info');
+    } catch (e2) {
+      const errorDetail = DEBUG_MODE
+        ? `Cannot connect to backend at ${API_BASE}`
+        : 'Please check your internet connection and try again.';
+      setMain(errorState('Could not reach the backend.', errorDetail));
+      return;
+    }
+  }
 
   // Auto-repair: if the role-specific DB row (students/lecturers table) is missing,
   // call /profile/complete to create it using the existing profile data.
@@ -1235,9 +1181,7 @@ async function apiGet(path) {
     });
     if (!res.ok) {
       const b = await res.json().catch(() => ({}));
-      const err = new Error(b.detail ?? `Server error (${res.status})`);
-      err.status = res.status;
-      throw err;
+      throw new Error(b.detail ?? `Server error (${res.status})`);
     }
     return res.json();
   } catch (error) {
